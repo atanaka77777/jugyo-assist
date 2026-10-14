@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://api.anthropic.com; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="theme-color" content="#1d2b25">
+<link rel="icon" href="data:,">
+<title>授業アシスト</title>
+<style>
+:root{
+  --board:#1d2b25;
+  --board-2:#253830;
+  --line:#3a5046;
+  --chalk:#ecebe3;
+  --chalk-dim:#a9b3aa;
+  --yellow:#f0d36b;
+  --pink:#f2a0a0;
+  --blue:#9cc7e8;
+  --green:#8fd39a;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:var(--board);color:var(--chalk);font-family:"Noto Sans JP","Noto Sans CJK JP","Hiragino Sans","Yu Gothic UI",system-ui,sans-serif;font-size:16px;line-height:1.6;-webkit-tap-highlight-color:transparent}
+.app{height:100%;display:flex;flex-direction:column;max-width:640px;margin:0 auto}
+header{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--chalk-dim);flex:none}
+.dot.on{background:var(--green)}
+.dot.busy{background:var(--yellow)}
+.dot.err{background:var(--pink)}
+#status{flex:1;min-width:0;font-size:14px;color:var(--chalk-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#usage{font-size:12px;color:var(--chalk-dim);white-space:nowrap}
+.icon-btn{background:none;border:1px solid var(--line);color:var(--chalk);border-radius:8px;min-width:52px;min-height:40px;font:inherit;font-size:14px}
+main{flex:1;overflow-y:auto;padding:18px 16px}
+.empty{color:var(--chalk-dim);font-size:1rem;margin:0}
+.card{padding:14px 0;border-bottom:1px dashed var(--line)}
+#feed .card:first-child{padding-top:0}
+.card-head{display:flex;gap:10px;align-items:baseline;font-size:12.5px;color:var(--chalk-dim)}
+.card-state{color:var(--yellow)}
+.card-state.done{color:var(--chalk-dim)}
+.card-state.err{color:var(--pink)}
+.card-q{font-size:14px;color:var(--blue);margin:4px 0 6px;word-break:break-word}
+.card-a{font-size:15px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+#feed .card:first-child .card-a{font-size:1.2rem;line-height:1.75;font-weight:500}
+#live{border-top:1px dashed var(--line);padding:8px 16px;font-size:13px;line-height:1.5;color:var(--chalk-dim);height:5.2em;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+#live .interim{color:#73867b}
+footer{display:grid;grid-template-columns:1fr 1.6fr;gap:10px;padding:10px 16px 14px}
+.big{min-height:64px;border-radius:14px;font:inherit;font-size:18px;font-weight:700;border:2px solid var(--chalk);background:transparent;color:var(--chalk)}
+.big.primary{background:var(--yellow);border-color:var(--yellow);color:var(--board)}
+.big.stop{border-color:var(--pink);color:var(--pink)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+button:disabled{opacity:.45}
+
+#sheet{position:fixed;inset:0;background:var(--board);overflow-y:auto;padding:calc(env(safe-area-inset-top,0px) + 12px) 16px calc(env(safe-area-inset-bottom,0px) + 28px);display:none;z-index:10}
+#sheet.open{display:block}
+.sheet-inner{max-width:640px;margin:0 auto}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+h2{font-size:20px;margin:0}
+h3{font-size:16px;margin:26px 0 6px;color:var(--yellow);font-weight:700}
+label{display:block;font-size:14px;margin:12px 0 4px}
+.hint{font-size:12.5px;line-height:1.6;color:var(--chalk-dim);margin:6px 0 0}
+input[type=text],input[type=password],textarea,select{width:100%;background:var(--board-2);border:1px solid var(--line);color:var(--chalk);border-radius:8px;padding:10px;font:inherit;font-size:15px}
+input[type=file]{font-size:14px;color:var(--chalk-dim);max-width:100%}
+textarea{min-height:140px;resize:vertical}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.btn{background:var(--board-2);border:1px solid var(--line);color:var(--chalk);border-radius:8px;padding:10px 14px;font:inherit;font-size:14px;min-height:44px}
+.btn.warn{color:var(--pink);border-color:var(--pink)}
+.radio{display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:15px}
+.radio input{margin-top:6px;flex:none;accent-color:var(--yellow)}
+#files{list-style:none;padding:0;margin:8px 0 0}
+#files li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+#files li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#testResult{font-size:13px;margin-top:8px;white-space:pre-wrap}
+#log{font-size:13px;color:var(--chalk-dim);white-space:pre-wrap;max-height:40vh;overflow-y:auto;background:var(--board-2);border-radius:8px;padding:10px;margin-top:8px}
+@media (prefers-reduced-motion:no-preference){
+  .dot.on{animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.35}}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="dot" id="dot"></span>
+    <span id="status">停止中</span>
+    <span id="usage"></span>
+    <button class="icon-btn" id="openSettings">設定</button>
+  </header>
+  <main>
+    <p id="emptyState" class="empty"></p>
+    <div id="feed"></div>
+  </main>
+  <div id="live"></div>
+  <footer>
+    <button class="big" id="toggle">開始</button>
+    <button class="big primary" id="manual">今のに答える</button>
+  </footer>
+</div>
+
+<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <h2 id="sheetTitle">設定</h2>
+      <button class="btn" id="closeSettings">閉じる</button>
+    </div>
+    <p class="hint">入力した内容はその場でこの端末に保存されます。</p>
+
+    <h3>APIキー</h3>
+    <label for="apiKey">Anthropic APIキー</label>
+    <input type="password" id="apiKey" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
+    <p class="hint">キーはこの端末のブラウザ内にだけ保存され、送信先はAnthropicのAPIだけです（ページ側でもそれ以外への通信を禁止しています）。このページ専用のキーを作って、Consoleで利用上限を決めておくと安心です。</p>
+    <div class="row">
+      <button class="btn" id="testBtn">接続テスト</button>
+      <button class="btn warn" id="clearKey">キーを削除</button>
+    </div>
+    <div id="testResult"></div>
+
+    <h3>呼ばれ方</h3>
+    <label for="names">自分の名前（カンマ区切りで複数入力できます）</label>
+    <input type="text" id="names" placeholder="例：山田, やまだ">
+    <p class="hint">音声認識では名前がひらがなやカタカナで出ることがあります。表記ゆれも入れておくと拾いやすくなります。</p>
+
+    <h3>自動で答える範囲</h3>
+    <label class="radio"><input type="radio" name="mode" value="all">質問や問題らしいものには全部答える</label>
+    <label class="radio"><input type="radio" name="mode" value="me">自分の名前が呼ばれたときだけ答える</label>
+    <label class="radio"><input type="radio" name="mode" value="off">自動では答えない（ボタンを押したときだけ答える）</label>
+    <p class="hint">「全部答える」にすると、答えを作る回数が増えるぶん料金も増えます。PDFを付けているとさらに増えるので、この設定で使うときは講義メモをテキストで入れるのがおすすめです。新しい答えが出ると、前の答えは下に残ります。</p>
+
+    <h3>授業の内容</h3>
+    <label for="course">科目名</label>
+    <input type="text" id="course" placeholder="例：信号処理特論">
+    <label for="memo">講義メモ・資料のテキスト</label>
+    <textarea id="memo" placeholder="今日の範囲、スライドの文章、キーワードなどを貼り付けてください"></textarea>
+    <p class="hint">答えはここの内容をもとに作ります。テキストで入れるとPDFより速く、料金も安く済みます。</p>
+    <label for="fileInput">資料ファイル（PDF・テキスト）</label>
+    <input type="file" id="fileInput" accept="application/pdf,.pdf,.txt,.md,text/plain" multiple>
+    <p class="hint">PDFは答えを作るたびに全体を送るので、そのぶん遅く、高くなります。その日のスライドだけにしておくのがおすすめです。テキストファイルは上のメモ欄に追記されます。</p>
+    <ul id="files"></ul>
+
+
+    <h3>モデル</h3>
+    <label for="detectModel">質問かどうかの判定に使うモデル</label>
+    <input type="text" id="detectModel" list="models" autocomplete="off" spellcheck="false">
+    <label for="answerModel">答えを作るモデル</label>
+    <input type="text" id="answerModel" list="models" autocomplete="off" spellcheck="false">
+    <datalist id="models">
+      <option value="claude-haiku-4-5">
+      <option value="claude-sonnet-5-5">
+      <option value="claude-opus-5-5">
+    </datalist>
+    <p class="hint">答えが出るまで遅いと感じたら、答え用も claude-haiku-4-5 にすると速くなります。モデル名を変えたら接続テストで確認してください。</p>
+
+    <h3>音声認識について</h3>
+    <p class="hint">文字起こしにはChromeの音声認識を使うため、音声はGoogleのサーバーで文字に変換されます。Anthropicに送るのは、文字になった授業内容のうち判定と回答に必要な部分と、設定した資料だけです。</p>
+
+    <h3>文字起こし</h3>
+    <div class="row">
+      <button class="btn" id="saveLog">テキストファイルで保存</button>
+      <button class="btn warn" id="clearLog">消去</button>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+const $ = id => document.getElementById(id);
+const API_URL = 'https://api.anthropic.com/v1/messages';
+const PREFIX = 'jugyo-assist:';
+const DEFAULTS = { detectModel: 'claude-haiku-4-5', answerModel: 'claude-sonnet-5-5', mode: 'all' };
+
+/* ---------- 保存まわり ---------- */
+const store = {
+  get(k, d = '') { try { const v = localStorage.getItem(PREFIX + k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(PREFIX + k, v); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(PREFIX + k); } catch (e) {} }
+};
+
+const settings = {
+  get apiKey() { return store.get('apiKey').trim(); },
+  get names() { return store.get('names').split(/[,、，\s]+/).map(s => s.trim()).filter(Boolean); },
+  get mode() { const m = store.get('mode', DEFAULTS.mode); return m === 'class' ? 'all' : m; },
+  get course() { return store.get('course').trim(); },
+  get memo() { return store.get('memo'); },
+  get detectModel() { return store.get('detectModel', DEFAULTS.detectModel).trim() || DEFAULTS.detectModel; },
+  get answerModel() { return store.get('answerModel', DEFAULTS.answerModel).trim() || DEFAULTS.answerModel; }
+};
+
+function bindField(id, key, def = '') {
+  const el = $(id);
+  el.value = store.get(key, def);
+  const save = () => store.set(key, el.value);
+  el.addEventListener('input', save);
+  el.addEventListener('change', save);
+}
+bindField('apiKey', 'apiKey');
+bindField('names', 'names');
+bindField('course', 'course');
+bindField('memo', 'memo');
+bindField('detectModel', 'detectModel', DEFAULTS.detectModel);
+bindField('answerModel', 'answerModel', DEFAULTS.answerModel);
+
+document.querySelectorAll('input[name=mode]').forEach(r => {
+  r.checked = r.value === settings.mode;
+  r.addEventListener('change', () => { if (r.checked) store.set('mode', r.value); });
+});
+
+/* PDFはlocalStorageに入りきらないのでIndexedDBに置く */
+const idb = {
+  db: null,
+  open() {
+    return new Promise((res, rej) => {
+      if (this.db) return res(this.db);
+      const req = indexedDB.open('jugyo-assist', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('files', { keyPath: 'id' });
+      req.onsuccess = () => { this.db = req.result; res(this.db); };
+      req.onerror = () => rej(req.error);
+    });
+  },
+  async all() {
+    const db = await this.open();
+    return new Promise((res, rej) => {
+      const r = db.transaction('files').objectStore('files').getAll();
+      r.onsuccess = () => res(r.result || []);
+      r.onerror = () => rej(r.error);
+    });
+  },
+  async put(obj) {
+    const db = await this.open();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('files', 'readwrite');
+      tx.objectStore('files').put(obj);
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+    });
+  },
+  async del(id) {
+    const db = await this.open();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('files', 'readwrite');
+      tx.objectStore('files').delete(id);
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+    });
+  }
+};
+
+let pdfFiles = [];
+async function refreshFiles() {
+  try { pdfFiles = await idb.all(); } catch (e) { pdfFiles = []; }
+  const ul = $('files');
+  ul.replaceChildren();
+  for (const f of pdfFiles) {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = `${f.name}（${(f.size / 1024 / 1024).toFixed(1)}MB）`;
+    const del = document.createElement('button');
+    del.className = 'btn warn';
+    del.textContent = '外す';
+    del.addEventListener('click', async () => { await idb.del(f.id); refreshFiles(); });
+    li.append(name, del);
+    ul.append(li);
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(',')[1]);
+    r.onerror = () => rej(new Error('ファイルを読み込めませんでした'));
+    r.readAsDataURL(file);
+  });
+}
+
+$('fileInput').addEventListener('change', async e => {
+  for (const f of e.target.files) {
+    try {
+      if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
+        if (f.size > 15 * 1024 * 1024) { alert(`${f.name} は15MBを超えているので追加できません。`); continue; }
+        const data = await fileToBase64(f);
+        await idb.put({ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, name: f.name, size: f.size, data });
+      } else {
+        const text = await f.text();
+        const memo = $('memo');
+        memo.value = (memo.value ? memo.value + '\n\n' : '') + `【${f.name}】\n${text}`;
+        store.set('memo', memo.value);
+      }
+    } catch (err) {
+      alert(`${f.name}：${err.message}`);
+    }
+  }
+  e.target.value = '';
+  refreshFiles();
+});
+
+/* ---------- 画面表示 ---------- */
+let statusHoldUntil = 0;
+function setStatus(text, kind = '', holdMs = 0) {
+  $('status').textContent = text;
+  $('dot').className = 'dot' + (kind ? ' ' + kind : '');
+  statusHoldUntil = holdMs ? Date.now() + holdMs : 0;
+}
+function idleStatus() {
+  if (Date.now() < statusHoldUntil) return;
+  if (detectBusy) return;
+  if (activeCount > 0) { setStatus(`答えを作っています（${activeCount}件）`, 'busy'); return; }
+  if (!running) { setStatus('停止中'); return; }
+  if (settings.mode === 'me' && settings.names.length === 0) {
+    setStatus('聞き取り中（名前が未設定なので自動では答えません）', 'on');
+  } else if (settings.mode === 'off') {
+    setStatus('聞き取り中（自動回答オフ）', 'on');
+  } else {
+    setStatus('聞き取り中', 'on');
+  }
+}
+
+const usage = { input: 0, output: 0 };
+function addUsage(u) {
+  if (!u) return;
+  usage.input += (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
+  usage.output += u.output_tokens || 0;
+  const k = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+  $('usage').textContent = `入力${k(usage.input)} 出力${k(usage.output)}`;
+}
+
+function showEmptyState() {
+  const el = $('emptyState');
+  el.hidden = cards.length > 0;
+  el.textContent = settings.apiKey
+    ? '「開始」を押すと授業の聞き取りを始めます。先生の質問や問題を拾うと、ここに答えが出ます。答えは考えてから出すので少し時間がかかります。前の答えは下に残ります。拾えなかったときは「今のに答える」を押してください。'
+    : '最初に右上の「設定」でAPIキーを入れてください。';
+}
+
+/* 答えは1問ごとにカードにして、新しいものを上に積む。複数の答えを同時に作れる */
+const cards = [];   // 新しい順
+let activeCount = 0;
+
+function createCard(question, manual) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  const head = document.createElement('div');
+  head.className = 'card-head';
+  const time = document.createElement('span');
+  time.textContent = hhmmss(Date.now()).slice(0, 5);
+  const state = document.createElement('span');
+  state.className = 'card-state';
+  head.append(time, state);
+  const q = document.createElement('div');
+  q.className = 'card-q';
+  q.textContent = question || (manual ? '直前の発言から質問を探しています' : '');
+  const a = document.createElement('div');
+  a.className = 'card-a';
+  el.append(head, q, a);
+  $('feed').prepend(el);
+  const card = { el, stateEl: state, qEl: q, aEl: a, t0: performance.now(), ctrl: new AbortController(), timer: null };
+  cards.unshift(card);
+  while (cards.length > 15) {
+    const old = cards.pop();
+    old.ctrl.abort();
+    old.el.remove();
+  }
+  $('emptyState').hidden = true;
+  document.querySelector('main').scrollTop = 0;
+  return card;
+}
+
+function setCardState(card, text, cls = '') {
+  card.stateEl.textContent = text;
+  card.stateEl.className = 'card-state' + (cls ? ' ' + cls : '');
+}
+
+function renderCard(card, full) {
+  let text = full.replace(/\r/g, '').replace(/^\s+/, '');
+  const mq = text.match(/^Q[：:]\s*([^\n]*)\n?/);
+  if (mq) {
+    if (mq[1].trim()) card.qEl.textContent = mq[1].trim();
+    text = text.slice(mq[0].length);
+  }
+  card.aEl.textContent = text.trim();
+}
+
+/* ---------- 文字起こし ---------- */
+const transcript = [];            // { t, text }
+let interimText = '';
+let sessionPrev = '';
+
+function recentLines(sec) {
+  const cut = Date.now() - sec * 1000;
+  return transcript.filter(x => x.t >= cut).map(x => x.text);
+}
+function clipStart(s, max) { return s.length > max ? '…' + s.slice(s.length - max) : s; }
+
+function renderLive() {
+  const live = $('live');
+  const nodes = transcript.slice(-2).map(x => {
+    const d = document.createElement('div');
+    d.textContent = x.text;
+    return d;
+  });
+  let interim = interimText;
+  if (sessionPrev && interim.startsWith(sessionPrev)) interim = interim.slice(sessionPrev.length);
+  interim = interim.trim();
+  if (interim) {
+    const d = document.createElement('div');
+    d.className = 'interim';
+    d.textContent = clipStart(interim, 80);
+    nodes.push(d);
+  }
+  live.replaceChildren(...nodes);
+}
+
+function hhmmss(t) {
+  const d = new Date(t);
+  return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
+}
+function appendLog(item) {
+  if (!$('sheet').classList.contains('open')) return;
+  const log = $('log');
+  log.textContent += `${hhmmss(item.t)} ${item.text}\n`;
+  log.scrollTop = log.scrollHeight;
+}
+function renderLog() {
+  $('log').textContent = transcript.map(x => `${hhmmss(x.t)} ${x.text}`).join('\n') + (transcript.length ? '\n' : '');
+}
+
+/* Android版Chromeでは、確定結果にそれまでの確定分がまとめて入って返ってくることがあるので、増えた部分だけを取り出す */
+function newPart(prev, cur) {
+  if (!prev) return cur;
+  if (cur.startsWith(prev)) return cur.slice(prev.length);
+  let i = 0;
+  const n = Math.min(prev.length, cur.length);
+  while (i < n && prev[i] === cur[i]) i++;
+  if (prev.length >= 6 && i >= prev.length * 0.8) return cur.slice(i);
+  return cur;
+}
+
+function onFinal(text) {
+  const item = { t: Date.now(), text };
+  transcript.push(item);
+  if (transcript.length > 6000) transcript.shift();
+  appendLog(item);
+  renderLive();
+  if (settings.mode === 'off') return;
+  if (detectTimer || looksLikeQuestion(text)) scheduleDetect();
+}
+
+/* ---------- 質問の候補をざっくり拾う（APIを呼ぶ回数を減らすため） ---------- */
+const CUE = /(ですか|ますか|でしょうか|でしょう|だろうか|かな|かね|かい|どう(思|考|な|です|だ|いう|して|やって|か)|なぜ|なんで|何|なに|どれ|どこ|どっち|どちら|いくつ|いくら|誰|だれ|わかる|分かる|知って|答えて|説明して|言ってみて|教えて|どうぞ|解いて|求めて|考えてみ|計算して|証明して|示して|やってみ|書いてみ|問題|例題|演習|[？?]|か[。]?$)/;
+
+function hasName(s) { return settings.names.some(n => s.includes(n)); }
+function looksLikeQuestion(text) {
+  if (hasName(text)) return true;
+  if (settings.mode === 'me') return CUE.test(text) && hasName(recentLines(25).join(''));
+  return CUE.test(text);
+}
+
+/* ---------- Claude API ---------- */
+/* 判定は速さ優先で、考える処理（adaptive thinking）を止めるか弱める。
+   答えは正確さ優先で、モデルの初期設定（考えてから答える）のまま送る */
+function withModelOptions(body, purpose) {
+  const out = { ...body };
+  if (purpose === 'answer') return out;
+  if (/^claude-sonnet-5-5/.test(out.model)) out.thinking = { type: 'between_tools' };
+  else if (/^claude-(haiku|sonnet|opus)-5/.test(out.model)) out.output_config = { effort: 'low' };
+  return out;
+}
+
+function apiHeaders() {
+  return {
+    'content-type': 'application/json',
+    'x-api-key': settings.apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true'
+  };
+}
+
+async function apiError(r) {
+  let detail = '';
+  try { const j = await r.json(); detail = (j && j.error && j.error.message) || ''; } catch (e) {}
+  const map = {
+    400: 'リクエストの内容に問題があります',
+    401: 'APIキーが正しくありません',
+    403: 'このキーでは使えない操作です',
+    404: 'モデル名が見つかりません。設定のモデル名を確認してください',
+    413: '送るデータが大きすぎます。PDFを減らしてください',
+    429: '利用上限か速度制限にかかりました',
+    500: 'Anthropic側でエラーが起きました',
+    529: 'Anthropicのサーバーが混み合っています'
+  };
+  const err = new Error(`${map[r.status] || 'エラーが起きました'}（${r.status}）${detail ? '：' + detail : ''}`);
+  err.status = r.status;
+  return err;
+}
+
+async function callClaude(body, signal, purpose = 'detect') {
+  const r = await fetch(API_URL, { method: 'POST', headers: apiHeaders(), body: JSON.stringify(withModelOptions(body, purpose)), signal });
+  if (!r.ok) throw await apiError(r);
+  const data = await r.json();
+  addUsage(data.usage);
+  return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+}
+
+async function streamClaude(body, signal, onDelta, purpose = 'answer') {
+  const r = await fetch(API_URL, { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ ...withModelOptions(body, purpose), stream: true }), signal });
+  if (!r.ok) throw await apiError(r);
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  const u = { input_tokens: 0, output_tokens: 0 };
+  let buf = '';
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) !== -1) {
+        const chunk = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        const data = chunk.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim()).join('');
+        if (!data) continue;
+        let ev;
+        try { ev = JSON.parse(data); } catch (e) { continue; }
+        if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') onDelta(ev.delta.text);
+        else if (ev.type === 'message_start' && ev.message && ev.message.usage) Object.assign(u, ev.message.usage);
+        else if (ev.type === 'message_delta' && ev.usage) u.output_tokens = ev.usage.output_tokens || u.output_tokens;
+        else if (ev.type === 'error') throw new Error('回答の受信中にエラーが起きました：' + ((ev.error && ev.error.message) || ''));
+      }
+    }
+  } finally {
+    addUsage(u);
+  }
+}
+
+function parseJSON(s) {
+  const m = String(s).match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch (e) { return null; }
+}
+
+/* ---------- 質問かどうかの判定 ---------- */
+let detectTimer = null, detectBusy = false, detectPending = false;
+
+function scheduleDetect() {
+  clearTimeout(detectTimer);
+  detectTimer = setTimeout(runDetect, 900);   // 質問の続きが来るのを少しだけ待つ
+}
+
+function detectSystem() {
+  const names = settings.names.join('、') || '（未設定）';
+  return `あなたは大学の授業を聞いている学生の手伝いをしています。入力は講師の発言を音声認識した文字列で、誤変換や句読点の抜けを含みます。
+学生の名前（表記ゆれを含む）：${names}
+
+【最新の発言】が次のどれに当たるかを判定してください。
+- me：学生本人を指名して、答えや意見を求めている
+- question：受講者に答えや考えを求める質問、または例題・演習・計算などの問題。講師がこのあと自分で答えそうな問いかけも含める
+- none：それ以外。「いいですか」「わかりましたか」のような確認、説明の続き、雑談、事務連絡など
+
+名前が呼ばれていて質問の中身がはっきりしない場合も me とし、直前の文脈から質問を推定してください。
+
+出力はJSONオブジェクト1つだけにしてください。前置きやコードブロックは付けないでください。
+{"target":"me か question か none","question":"求められている質問を、文脈を補って1文で。none のときは空文字"}`;
+}
+
+async function runDetect() {
+  detectTimer = null;
+  if (detectBusy) { detectPending = true; return; }
+  if (!settings.apiKey) { setStatus('APIキーが未設定です', 'err', 5000); return; }
+  const lines = recentLines(60);
+  if (!lines.length) return;
+  const latest = lines.slice(-2).join('\n');
+  const before = clipStart(lines.slice(0, -2).join('\n'), 1500);
+  detectBusy = true;
+  setStatus('質問かどうか確認中…', 'busy');
+  try {
+    const text = await callClaude({
+      model: settings.detectModel,
+      max_tokens: 400,
+      system: detectSystem(),
+      messages: [{ role: 'user', content: `【少し前の発言】\n${before || '（なし）'}\n\n【最新の発言】\n${latest}` }]
+    });
+    const j = parseJSON(text);
+    detectBusy = false;
+    const want = j && (j.target === 'me' || (j.target === 'question' && settings.mode === 'all'));
+    const q = j && typeof j.question === 'string' ? j.question.trim() : '';
+    if (want && q && !isDuplicate(q)) {
+      startAnswer(q, false);
+    } else {
+      idleStatus();
+    }
+  } catch (e) {
+    detectBusy = false;
+    setStatus(e.message, 'err', 8000);
+  } finally {
+    detectBusy = false;
+    if (detectPending) { detectPending = false; scheduleDetect(); }
+  }
+}
+
+const recentQuestions = [];
+function isDuplicate(q) {
+  const norm = s => s.replace(/[\s。、？?！!「」]/g, '');
+  const now = Date.now();
+  while (recentQuestions.length && now - recentQuestions[0].t > 60000) recentQuestions.shift();
+  if (recentQuestions.some(x => norm(x.q) === norm(q))) return true;
+  recentQuestions.push({ q, t: now });
+  return false;
+}
+
+/* ---------- 答えを作る ---------- */
+function answerSystem() {
+  const memo = settings.memo.trim();
+  return `あなたは、大学の授業中に先生から出された質問や問題に、学生が答えるのを手伝います。
+科目：${settings.course || '未設定'}
+${memo ? `\n講義資料・メモ：\n<資料>\n${memo}\n</資料>\n` : ''}${pdfFiles.length ? '\n添付のPDFも講義資料です。\n' : ''}
+守ること：
+- 入力は音声認識なので誤変換を含みます。専門用語や式は、文脈と資料から正しく読み替えてください。
+- 確信が持てない部分は、そのことがわかるように書いてください。
+- 答えはスマホの画面に文字のまま表示されます。見出しや太字などのマークダウン記号とLaTeXは使わず、式は x² + y² = r² や X(ω) = ∫ x(t) e^(−jωt) dt のように、記号をそのまま使った読みやすい形で書いてください。
+
+最初の1行は「Q：」に続けて、答える質問や問題を1文で書いてください。1行空けて、その下に答えを書いてください。`;
+}
+
+async function startAnswer(question, manual) {
+  if (!settings.apiKey) { openSettings(); $('testResult').textContent = '先にAPIキーを入れてください。'; return; }
+  const lines = recentLines(180);
+  if (manual && !lines.length) { setStatus('まだ文字起こしがありません', 'err', 4000); return; }
+
+  const card = createCard(question, manual);
+  activeCount++;
+  idleStatus();
+  let phase = '考えています';
+  const tick = () => setCardState(card, `${phase}（${Math.round((performance.now() - card.t0) / 1000)}秒）`);
+  tick();
+  card.timer = setInterval(tick, 1000);
+
+  const context = clipStart(lines.join('\n'), 3000) || '（なし）';
+  const ask = manual
+    ? 'いま先生に当てられました。直近の発言から、学生に向けられた質問や問題を見つけて答えてください。はっきりしない場合は、最後の問いかけに答えてください。'
+    : `先生からの質問・問題：${question}`;
+  const content = [];
+  for (const f of pdfFiles) {
+    content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.data } });
+  }
+  content.push({ type: 'text', text: `直近の授業の発言（音声認識なので誤りを含みます）：\n${context}\n\n${ask}` });
+
+  let full = '';
+  try {
+    await streamClaude({
+      model: settings.answerModel,
+      max_tokens: 8000,
+      system: answerSystem(),
+      messages: [{ role: 'user', content }]
+    }, card.ctrl.signal, delta => {
+      phase = '書いています';
+      full += delta;
+      renderCard(card, full);
+    });
+    clearInterval(card.timer);
+    setCardState(card, `${Math.round((performance.now() - card.t0) / 1000)}秒で回答`, 'done');
+  } catch (e) {
+    clearInterval(card.timer);
+    if (e.name === 'AbortError') return;
+    setCardState(card, 'エラー', 'err');
+    if (!full) card.aEl.textContent = e.message;
+    setStatus(e.message, 'err', 10000);
+  } finally {
+    clearInterval(card.timer);
+    activeCount--;
+    idleStatus();
+  }
+}
+
+/* ---------- 音声認識 ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, running = false, restartTimer = null, netErrors = 0, wakeLock = null;
+
+function createRec() {
+  const r = new SR();
+  r.lang = 'ja-JP';
+  r.continuous = true;
+  r.interimResults = true;
+  r.maxAlternatives = 1;
+  r.onstart = () => { sessionPrev = ''; interimText = ''; idleStatus(); };
+  r.onresult = ev => {
+    netErrors = 0;
+    let interim = '';
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const res = ev.results[i];
+      const text = res[0].transcript.trim();
+      if (res.isFinal) {
+        const add = newPart(sessionPrev, text).trim();
+        sessionPrev = text;
+        if (add) onFinal(add);
+      } else {
+        interim += res[0].transcript;
+      }
+    }
+    interimText = interim;
+    renderLive();
+  };
+  r.onerror = ev => {
+    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+      running = false;
+      updateToggle();
+      setStatus('マイクが許可されていません。Chromeのサイト設定でマイクを許可してください', 'err', 15000);
+    } else if (ev.error === 'network') {
+      netErrors++;
+      setStatus('音声認識の通信が切れました。つなぎ直しています…', 'err', 3000);
+    } else if (ev.error !== 'no-speech' && ev.error !== 'aborted') {
+      setStatus('音声認識のエラー：' + ev.error, 'err', 5000);
+    }
+  };
+  r.onend = () => {
+    if (!running) return;
+    clearTimeout(restartTimer);
+    const wait = netErrors ? Math.min(8000, 800 * netErrors) : 150;
+    restartTimer = setTimeout(() => { if (running) { try { r.start(); } catch (e) {} } }, wait);
+  };
+  return r;
+}
+
+async function keepAwake() {
+  try { if ('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && running) keepAwake();
+});
+
+function updateToggle() {
+  const b = $('toggle');
+  b.textContent = running ? '停止' : '開始';
+  b.classList.toggle('stop', running);
+}
+
+function start() {
+  if (!SR) { setStatus('このブラウザは音声認識に対応していません。AndroidのChromeで開いてください', 'err', 15000); return; }
+  if (!settings.apiKey) { openSettings(); $('testResult').textContent = '先にAPIキーを入れてください。'; return; }
+  running = true;
+  netErrors = 0;
+  updateToggle();
+  if (!rec) rec = createRec();
+  try { rec.start(); } catch (e) {}
+  keepAwake();
+  showEmptyState();
+}
+
+function stop() {
+  running = false;
+  clearTimeout(restartTimer);
+  clearTimeout(detectTimer);
+  detectTimer = null;
+  try { rec && rec.stop(); } catch (e) {}
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  interimText = '';
+  renderLive();
+  updateToggle();
+  statusHoldUntil = 0;
+  setStatus('停止中');
+}
+
+
+
+/* ---------- ボタン ---------- */
+$('toggle').addEventListener('click', () => running ? stop() : start());
+$('manual').addEventListener('click', () => startAnswer('', true));
+
+function openSettings() {
+  renderLog();
+  $('sheet').classList.add('open');
+  const log = $('log');
+  log.scrollTop = log.scrollHeight;
+}
+function closeSettings() {
+  $('sheet').classList.remove('open');
+  showEmptyState();
+  idleStatus();
+}
+$('openSettings').addEventListener('click', openSettings);
+$('closeSettings').addEventListener('click', closeSettings);
+
+$('clearKey').addEventListener('click', () => {
+  if (!confirm('この端末に保存したAPIキーを削除しますか？')) return;
+  store.del('apiKey');
+  $('apiKey').value = '';
+  $('testResult').textContent = 'キーを削除しました。';
+});
+
+$('testBtn').addEventListener('click', async () => {
+  const out = $('testResult');
+  if (!settings.apiKey) { out.textContent = 'APIキーが入っていません。'; return; }
+  out.textContent = '確認しています…';
+  const targets = [['判定用', settings.detectModel], ['回答用', settings.answerModel]];
+  const lines = [];
+  for (const [label, model] of targets) {
+    try {
+      await callClaude({ model, max_tokens: 20, messages: [{ role: 'user', content: 'OKとだけ返してください' }] });
+      lines.push(`${label}（${model}）：使えます`);
+    } catch (e) {
+      lines.push(`${label}（${model}）：${e.message}`);
+    }
+  }
+  out.textContent = lines.join('\n');
+});
+
+$('saveLog').addEventListener('click', () => {
+  if (!transcript.length) { alert('保存する文字起こしがありません。'); return; }
+  const text = transcript.map(x => `${hhmmss(x.t)} ${x.text}`).join('\n') + '\n';
+  const d = new Date();
+  const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+  const course = settings.course ? settings.course.replace(/[\\/:*?"<>|]/g, '') + '_' : '';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  a.download = `${course}文字起こし_${stamp}.txt`;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
+
+$('clearLog').addEventListener('click', () => {
+  if (!confirm('文字起こしを消去しますか？')) return;
+  transcript.length = 0;
+  renderLog();
+  renderLive();
+});
+
+/* ---------- 起動時 ---------- */
+showEmptyState();
+refreshFiles();
+if (!SR) setStatus('このブラウザは音声認識に対応していません。AndroidのChromeで開いてください', 'err', 60000);
+})();
+</script>
+</body>
+</html>
